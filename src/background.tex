@@ -8,14 +8,50 @@ This chapter should transfer all knowledge necessary to understand the following
 As this and the following chapters are likely longer than a few pages, consider structuring them into sections (but avoid fragmentation by overly fine-grained sectioning).
 Use the \verb|\..section{}| command family as illustrated below:
 
-\section{First section}
-\label{sec:background_overview}
-
-\subsection{First subsection}
-
-\subsection{Second subsection}
-
-\subsubsection{First subsubsection}
 
 Follow a top-down approach when structuring the chapter, and guide the reader by giving a short overview at the beginning of each section.
 Again, you can use labels and references (e.g., referring to \cref{sec:background_overview}).
+
+
+\section{Guitar distortion pedals}
+\label{sec:background_pedals}
+
+\subsection{JHS Packrat}
+\label{subsec:background_packrat}
+
+\subsection{Other Pedals..}
+% \label{subsec:background_packrat}
+
+\subsection{Why distortion is hard to model}
+\label{subsec:background_hard_to_model}
+% memory, level dependence, aliasing
+
+\section{Block-oriented nonlinear models}
+\label{sec:background_block_models}
+
+\subsection{Wiener, Hammerstein and Wiener--Hammerstein systems}
+\label{subsec:background_wh}
+
+\subsection{Parallel Wiener--Hammerstein (PWH)}
+\label{subsec:background_pwh}
+
+\section{System identification with multisines}
+\label{sec:background_identification}
+
+\subsection{Random-phase multisines, periods and realizations}
+\label{subsec:background_multisines}
+
+\subsection{Best linear approximation (BLA) and its level dependence}
+\label{subsec:background_bla}
+
+\subsection{Error measures: NMSE and spectral distance}
+\label{subsec:background_error_measures}
+
+\section{Real-time audio on embedded hardware}
+\label{sec:background_realtime}
+
+\subsection{Block processing, latency and time budget}
+\label{subsec:background_block_processing}
+
+\subsection{Biquad filters and static nonlinearities on a Cortex-M7}
+\label{subsec:background_biquads}
