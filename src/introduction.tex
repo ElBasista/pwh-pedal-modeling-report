@@ -1,27 +1,43 @@
 \chapter{Introduction}
 \label{ch:introduction}
 
-The introduction motivates your work and puts it into a bigger context.
-It should answer the following questions:
-What is the background of this work?
-What is the state of the art?
-Why is this project necessary to advance the state of the art?
-What are the problems that have to be solved and why are they difficult?
-What are your contributions to solve these problems?
-How do you evaluate your solution to show that it is adequate and applicable?
+% The introduction motivates your work and puts it into a bigger context.
+% It should answer the following questions:
+% What is the background of this work?
+% What is the state of the art?
+% Why is this project necessary to advance the state of the art?
+% What are the problems that have to be solved and why are they difficult?
+% What are your contributions to solve these problems?
+% How do you evaluate your solution to show that it is adequate and applicable?
 
-An introduction written along these questions naturally follows the \textit{\gls{spse}}\footnote{%
-  The \acrshort{spse} approach was established in a book~\cite{Hoey83}, but is also briefly summarized in a more recent article~\cite{MP12}, which is available online.
-} approach.
-In the \emph{situation}, you set the scene for your work and catch the interest of the readers by showing the importance and generality of the scene.
-In the \emph{problem}, you spot an issue in the scene and show why and how it significantly taints the scene.
-In the \emph{solution}, you outline your solution to that issue.
-Finally, in the \emph{evaluation}, you present the main arguments why the claimed solution actually does solve the problem.
+% An introduction written along these questions naturally follows the \textit{\gls{spse}}\footnote{%
+%   The \acrshort{spse} approach was established in a book~\cite{Hoey83}, but is also briefly summarized in a more recent article~\cite{MP12}, which is available online.
+% } approach.
+% In the \emph{situation}, you set the scene for your work and catch the interest of the readers by showing the importance and generality of the scene.
+% In the \emph{problem}, you spot an issue in the scene and show why and how it significantly taints the scene.
+% In the \emph{solution}, you outline your solution to that issue.
+% Finally, in the \emph{evaluation}, you present the main arguments why the claimed solution actually does solve the problem.
 
-In the following chapters, you will elaborate each of the four \gls{spse} elements in detail:
-In \textsl{Background}, you lay the foundations for an in-depth understanding of the situation and the problem.
-In \textsl{Related Work}, you show how others have address this (or similar) problems and why their solutions are not sufficient or applicable.
-In \textsl{Implementation}, you specify your solution, which you then evaluate rigorously for strengths and weaknesses in \textsl{Results}.
+% In the following chapters, you will elaborate each of the four \gls{spse} elements in detail:
+% In \textsl{Background}, you lay the foundations for an in-depth understanding of the situation and the problem.
+% In \textsl{Related Work}, you show how others have address this (or similar) problems and why their solutions are not sufficient or applicable.
+% In \textsl{Implementation}, you specify your solution, which you then evaluate rigorously for strengths and weaknesses in \textsl{Results}.
 
-At the end of the introduction, you should explicitly show this structure to the reader by briefly explaining how this report is organized.
-Instead of using the general \gls{spse} terminology and the chapter names mentioned above, we urge you to use the domain-specific terminology established in the introduction and point to chapters using cross references (e.g., refering to \cref{ch:background} instead of ``the Background chapter'').
+% At the end of the introduction, you should explicitly show this structure to the reader by briefly explaining how this report is organized.
+% Instead of using the general \gls{spse} terminology and the chapter names mentioned above, we urge you to use the domain-specific terminology established in the introduction and point to chapters using cross references (e.g., refering to \cref{ch:background} instead of ``the Background chapter'').
+
+
+Notes: 
+- Today most audio production, editing and processing is done digitally inside a DAW. Many virtual effects already exist. Similarly digital guitar pedals, amp simulators and neural imitators are becoming more and more common. For example Kemper Profiler Stage (link) that runs in real-time digitally on a guitar input. There is a real demand for identifying and imitating analog guitar effect pedals and amps. 
+
+- There are many kinds of common guitar effects: reverb, delay, distortion, flanger/phaser, octaver and other non-linear effects.
+
+- We are going to focus only on one of them: distortion. 
+
+- There are different ways of modeling non-linear distortion: white-box, grey-box and black-box models. White-box models simulate the entire circuit using physical models. Black-box models on the other hand knows nothing about the inside of the pedal and grey-box models are a hybrid between the two. 
+
+- PWH, the method used in this work, is a form of black-box modeling used in distortion modeling for Power Amplifiers. 
+
+- This work focuses on two tasks: 1) the identification of the distortion model (PWH) using Antonios codebase adapted for audio. 2) Implementation of the distortion on a real-time DSP guitar pedal called "Graetli" (introduced in Chapter 2)
+
+- This report is structured as follows. \cref{ch:background} introduces the PWH method and the "Graetli". \cref{ch:related_work} explains the related works and how they are used. \cref{ch:implementation} describes how the PWH identification is implemented, what problems arose and how it was implemented on the Graetli. The  validation and performance evaluation are presented in \cref{ch:results}. Finally, \cref{ch:conclusion} summarizes the contributions of this work and discusses potential directions for future improvements.
