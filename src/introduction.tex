@@ -1,6 +1,5 @@
 \chapter{Introduction}
 \label{ch:introduction}
-
 % The introduction motivates your work and puts it into a bigger context.
 % It should answer the following questions:
 % What is the background of this work?
@@ -27,17 +26,52 @@
 % Instead of using the general \gls{spse} terminology and the chapter names mentioned above, we urge you to use the domain-specific terminology established in the introduction and point to chapters using cross references (e.g., refering to \cref{ch:background} instead of ``the Background chapter'').
 
 
-Notes: 
-- Today most audio production, editing and processing is done digitally inside a DAW. Many virtual effects already exist. Similarly digital guitar pedals, amp simulators and neural imitators are becoming more and more common. For example Kemper Profiler Stage (link) that runs in real-time digitally on a guitar input. There is a real demand for identifying and imitating analog guitar effect pedals and amps. 
+Over the past decades, music production has moved almost entirely into the digital domain. Recording, editing, mixing, and effect processing are today mostly carried out inside a \acrfull{daw}, where a large ecosystem of software effects replaces what used to require dedicated analog hardware.
+% ~\cite{zoelzer2011dafx}
+The same is now happening on stage: digital amplifier simulators and multi-effects processors such as the Line~6 Helix~\cite{line6helix}, the Kemper Profiler Stage~\cite{kemperprofiler}, the Neural~DSP Quad Cortex~\cite{neuraldspqc}, and the IK~Multimedia TONEX~\cite{iktonex} process the guitar signal in real time and are increasingly used as replacements for analog amplifiers and pedalboards. Projects such as the Neural Amp Modeler~\cite{atkinson_nam} further allow musicians to create digital captures of their own equipment. This illustrates a demand for methods that identify and faithfully reproduce the behavior of analog guitar gear.\\
 
-- There are many kinds of common guitar effects: reverb, delay, distortion, flanger/phaser, octaver and other non-linear effects.
+Guitar effects cover a wide range of signal processing operations, among them distortion effects (overdrive, distortion, fuzz), dynamics processing (compressor, noise gate), filtering (equalizer, wah), modulation effects (chorus, flanger, phaser, tremolo, vibrato), pitch effects (octaver, harmonizer, pitch shifter), as well as time-based effects such as delay and reverb~\cite{zoelzer2011dafx}.  Nonlinear effects remain challenging, as their characteristic sound depends on the behavior of analog nonlinear circuitry. This work focuses only on the identification and reproduction of \emph{distortion}, which is one of the most defining effects of the electric guitar.\\
 
-- We are going to focus only on one of them: distortion. 
 
-- There are different ways of modeling non-linear distortion: white-box, grey-box and black-box models. White-box models simulate the entire circuit using physical models. Black-box models on the other hand knows nothing about the inside of the pedal and grey-box models are a hybrid between the two. 
+The digital emulation of analog audio devices is known as \acrfull{va} modeling. Approaches to \gls{va} modeling are commonly classified as white-box, grey-box, or black-box~\cite{vanhatalo2022review, comunita2025differentiable}. White-box models are derived from the circuit schematic and simulate its behavior using physical models of the individual components~\cite{yeh2009thesis, wright2020realtime}. They can be highly accurate, but require full knowledge of the circuit. Black-box models, on the other hand, require no knowledge of the internal circuitry and are identified purely from input--output measurements of the device~\cite{wright2020realtime}. 
+Grey-box models combine both, using a simplified, circuit-informed structure whose parameters are fitted to measured data~\cite{comunita2025differentiable}.\\
 
-- PWH, the method used in this work, is a form of black-box modeling used in distortion modeling for Power Amplifiers. 
 
-- This work focuses on two tasks: 1) the identification of the distortion model (PWH) using Antonios codebase adapted for audio. 2) Implementation of the distortion on a real-time DSP guitar pedal called "Graetli" (introduced in Chapter 2)
+Nonlinear black-box modeling is not unique to audio. 
+In wireless communications, \acrfullpl{pa} exhibit nonlinear distortion, and behavioral models are often used to describe them for \acrfull{dpd}~\cite{ghannouchi2015behavioral}. 
+Such behavioral models are usually identified from input--output observations alone and are therefore black-box models~\cite{silveira2009parallel}.\\
 
-- This report is structured as follows. \cref{ch:background} introduces the PWH method and the "Graetli". \cref{ch:related_work} explains the related works and how they are used. \cref{ch:implementation} describes how the PWH identification is implemented, what problems arose and how it was implemented on the Graetli. The  validation and performance evaluation are presented in \cref{ch:results}. Finally, \cref{ch:conclusion} summarizes the contributions of this work and discusses potential directions for future improvements.
+While single Wiener and Hammerstein structures have been applied to guitar distortion~\cite{novak2010synchronized, eichas2016blackbox, eichas2018wiener}, the \gls{pwh} model and its identification from multisine measurements have, to the best of our knowledge, so far only been used for \glspl{pa}. Transferring them to audio is not straightforward: a \gls{pa} is modeled in a narrow band around its carrier, whereas a guitar signal spans about ten octaves, and a distortion pedal clips much harder and depends strongly on the input level. At the same time, the model consists only of a few filters and static nonlinearities, which makes it small enough to run in real time on an embedded platform.\\
+
+In this work, we therefore apply the \gls{pwh} model to the identification
+and real-time emulation of guitar distortion effects. The work is divided into
+two main tasks:
+\begin{enumerate}
+  \item \textbf{Identification:} We adapt an existing \gls{pwh} identification
+        codebase (\cref{sec:related_pwh}), originally developed for
+        \glspl{pa}, to audio signals and use it to identify models of several
+        digital and analog guitar distortion effects from input--output
+        measurements.
+  \item \textbf{Real-time implementation:} We implement the identified
+        \gls{pwh} models on the Graetli (a real-time \gls{dsp} guitar pedal
+        platform introduced in \cref{ch:background}).
+\end{enumerate}
+
+We evaluate the identified models by comparing their outputs with recordings
+of the original effects in terms of spectral distance for a range of input
+signals. The real-time implementation is assessed by measuring the processing
+time per audio block on the Graetli and comparing it to the available
+real-time budget. Finally, the original pedal and the Graetli are compared
+side by side by processing the same input signals on both and again
+evaluating the spectral distance.\\
+
+
+This report is structured as follows. \Cref{ch:background} introduces the
+\gls{pwh} model and the Graetli platform. \Cref{ch:related_work} reviews
+related approaches to distortion modeling and explains how they relate to
+this work. \Cref{ch:implementation} describes the implementation of the
+\gls{pwh} identification for audio, the problems encountered, and the
+real-time implementation on the Graetli. The validation and performance
+evaluation are presented in \cref{ch:results}. Finally,
+\cref{ch:conclusion} summarizes the contributions of this work and discusses
+directions for future improvements.
