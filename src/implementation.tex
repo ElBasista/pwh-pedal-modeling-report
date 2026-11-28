@@ -1,59 +1,224 @@
+% This chapter explains your contributions, be it algorithms, architectures, libraries, hardware, or others.
+% As usual, follow a top-down approach and break the chapter into meaningful sections.
+% It may even be necessary to split the chapter into multiple chapters (e.g., to separate architecture from implementation in a hardware design).
+
+% Derive a structure for this chapter that is meaningful for your report and discuss it with your advisors.
+
+% Gut zum sagen, was alles probiert wurde. aber keine chronologische dokumentation. Eher als liste wo wir  sagen was am besten funktioniert.
+
 \chapter{Implementation}
 \label{ch:implementation}
 
-This chapter explains your contributions, be it algorithms, architectures, libraries, hardware, or others.
-As usual, follow a top-down approach and break the chapter into meaningful sections.
-It may even be necessary to split the chapter into multiple chapters (e.g., to separate architecture from implementation in a hardware design).
-
-Derive a structure for this chapter that is meaningful for your report and discuss it with your advisors.
-
+This chapter describes how a \gls{pwh} model of a distortion pedal is obtained and run in real time. \Cref{sec:impl_overview} gives an overview of the whole chain. \Cref{sec:impl_audio_port} explains how the \gls{pa} framework was adapted to audio, \cref{sec:impl_matlab,sec:impl_python} the two identification steps, \cref{sec:impl_export} the export of a model, and \cref{sec:impl_graetli} its implementation on the Graetli.
 
 
 \section{Overview}
 \label{sec:impl_overview}
-% measure -> identify -> refine -> export -> run on the Grätli
+
+\Cref{fig:impl_overview} shows the chain from the device to the real-time model. It consists of six steps:
+\begin{enumerate}
+  \item \textbf{Stimulus:} MATLAB generates random-phase multisines at ten levels and writes them to one WAV file.
+  \item \textbf{Measurement:} the file is played through the device and recorded together with a direct loopback of the interface.
+  \item \textbf{Structural identification (MATLAB):} the \glspl{bla} at all levels give the poles, zeros and number of branches. A first nonlinearity is fitted by least squares.
+  \item \textbf{Refinement (Python):} the nonlinearities are replaced by splines, and all parameters are optimized jointly with gradient descent.
+  \item \textbf{Export:} the model is written to a C header as biquad and spline coefficients.
+  \item \textbf{Real time:} the header is compiled into the Graetli firmware.
+\end{enumerate}
+Each step is one script in the repository. A single version file selects the data set, so a new measurement only needs a new version name.
+
+\begin{figure}[htbp]
+  \centering
+  \misspar{block diagram: stimulus $\rightarrow$ device $\rightarrow$ MATLAB $\rightarrow$ Python $\rightarrow$ header $\rightarrow$ Graetli}
+  \caption{Identification and deployment chain.}
+  \label{fig:impl_overview}
+\end{figure}
+
 
 \section{Adapting the PA framework to audio}
 \label{sec:impl_audio_port}
 
+The framework~\cite{pwh_pa_code} was written for power amplifiers: a carrier at \SI{24}{\giga\hertz}, \SI{400}{\mega\hertz} of bandwidth, \SI{256}{\giga\hertz} sampling, and data from Cadence circuit simulations in CSV files. For audio, we changed the stimulus, connected real recordings to the input format of the framework, and fixed several problems that only showed up on audio data.
+
 \subsection{Stimulus design}
 \label{subsec:impl_stimulus}
-% 48 kHz, linear vs. log-spaced up to 10 kHz, power levels, guards
+
+\Cref{tab:impl_stimulus} lists the final stimulus. The levels are given in dBm at \SI{50}{\ohm}, as in the \gls{pa} framework. In practice, they only define the RMS value of the digital signal: \SI{-40}{dBm} corresponds to an RMS of 0.002 and \SI{0}{dBm} to 0.2 in full scale of the interface. The levels are closer together around the clipping knee (\SI{3}{\decibel} steps) than in the linear range and in saturation. Each level draws its own random phases. When all levels shared one seed, their \gls{bla} errors were correlated, and the order search found poles even for a static system. All levels are combined into one file, which is played and recorded in one take. One period of silence separates two realizations, so the device settles between them. The first realization of each level directly follows the previous level and is therefore not used.
+
+\begin{table}[htbp]
+  \centering
+  \caption{Final multisine stimulus.}
+  \label{tab:impl_stimulus}
+  \begin{tabular}{ll}
+    \toprule
+    Sampling rate $f\sb{s}$ & \SI{48}{\kilo\hertz} \\
+    Period $N$ & 16384 samples (\SI{0.34}{\second}, $\Delta f = \SI{2.93}{\hertz}$) \\
+    Band & \SI{40}{\hertz} -- \SI{10}{\kilo\hertz}, 339 log-spaced tones \\
+    Periods per realization $P$ & 4 \\
+    Realizations $M$ & 16 \\
+    Levels & -40,-35,-30,-27,-24,-21,-18,-15,-8,0 {dBm} \\
+    Guard & one period of silence between realizations \\
+    \midrule
+    \gls{bla} & realizations 1--12 \\
+    MATLAB nonlinearity fit / validation & realization 2 / 16 \\
+    Python training / validation / test & 2--12 / 13--14 / 15--16 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\Cref{tab:impl_stimulus_tried} shows the stimuli we tried before. Two changes helped most. More realizations with fewer periods each give a cleaner \gls{bla}: measurement noise was far below the nonlinear distortion, and only new realizations average out the distortion. A band limited to the range where a guitar has energy also helped. On the softer Packrat setting, these changes improved the test \gls{nmse} from \SI{-12.2}{\decibel} to \SI{-28.4}{\decibel}. Log spacing up to \SI{10}{\kilo\hertz} then gained another \SI{1.5}{\decibel}, although the band is twice as wide. Since band, periods, realizations and levels changed together, the gain cannot be assigned to a single change.
+
+\begin{table}[htbp]
+  \centering
+  \caption{Stimuli used during the project. NMSE: Python test NMSE on the softer Packrat setting.}
+  \label{tab:impl_stimulus_tried}
+  \begin{tabular}{lllll}
+    \toprule
+    Band & Spacing & $N$ & $P \times M$ & NMSE \\
+    \midrule
+    \SI{0.1}{} -- \SI{19.9}{\kilo\hertz} & linear & 65536 & $4 \times 6$ & -- (order search took hours) \\
+    \SI{0.1}{} -- \SI{19.9}{\kilo\hertz} & linear & 4096 & $64 \times 4$ & \SI{-12.2}{\decibel} \\
+    \SI{40}{\hertz} -- \SI{5}{\kilo\hertz} & linear & 4096 & $16 \times 16$ & \SI{-28.4}{\decibel} \\
+    \SI{40}{\hertz} -- \SI{10}{\kilo\hertz} & log & 16384 & $4 \times 16$ & \SI{-29.9}{\decibel} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
 
 \subsection{Bandwidth}
 \label{subsec:bandwidth}
-% 48 kHz, linear vs. log-spaced up to 10 kHz, power levels, guards
+
+The upper band edge is a trade-off. A wider band covers more of the guitar signal. But the model runs at \SI{48}{\kilo\hertz}, and the harmonics of every excited tone above \SI{24}{\kilo\hertz} alias (\cref{subsec:background_hard_to_model}). The full audio band also excites far more bins: with $N = 65536$, the band up to \SI{19.9}{\kilo\hertz} had about 27\,000 bins, and the order search took several hours. Our guitar test recording has \SI{-31}{\decibel} of its energy between 5 and \SI{10}{\kilo\hertz}, and only \SI{-83}{\decibel} above \SI{10}{\kilo\hertz}. We therefore chose \SI{10}{\kilo\hertz}. Above this edge the model is not excited, and its response there is an extrapolation. Log spacing needs a fine grid at the low end, where neighboring tones are only a few hertz apart. This is why $N$ was raised to 16384, and $P$ lowered to 4 to keep the length of a realization.
 
 \subsection{Measurement setup and the WAV bridge}
 \label{subsec:impl_measurement}
-% Focusrite, Reaper, splitting and aligning recordings
+
+The stimulus is played from Reaper through a Focusrite \misspar{model} audio interface. One output feeds the pedal, whose output is recorded on one input channel. A second cable connects an output directly to a second input channel. This loopback is used as the model input instead of the generated signal, so the latency and gain of the interface are part of the data. Both input gains are set on the loudest level, as high as possible without clipping. The recordings are 24-bit WAV files at \SI{48}{\kilo\hertz}.
+
+The framework expects one CSV file per level and realization, in the format written by Cadence. A short Python bridge converts between the two:
+\begin{enumerate}
+  \item The start of the stimulus in the recording is found by cross-correlation. The template spans two realizations, because a single period would match every period.
+  \item The recording is cut into levels and realizations, and the loopback and pedal channels are cut at the same samples.
+  \item Each part is written as a CSV file with time, input and output columns.
+\end{enumerate}
+A recording without a pedal (interface loopback only) checks the chain. It reaches a validation \gls{nmse} of \SI{-65.2}{\decibel}, far below any pedal model error.
 
 \subsection{Fixes along the way}
 \label{subsec:impl_fixes}
-% regressor delay, identical phases, causality and oversampling
+
+Before measuring pedals, we tested the chain on systems whose correct model is known: an identity, a static polynomial, a linear low-pass filter, and the PeakEater plugin~\cite{peakeater}. These tests revealed the following problems:
+\begin{itemize}
+  \item \textbf{Zero orders.} The framework required at least one pole and one zero, because a \gls{pa} always has dynamics. An identity or a static clipper could not be modeled. Zero orders are now allowed, and the order search only tests proper transfer functions ($n\sb{n} \leq n\sb{d}$).
+  \item \textbf{Delayed regressors.} When building the regressors for the nonlinearity fit, a padding error delayed the branch filters by $n\sb{d} - n\sb{n}$ samples. The saved model has no such delay. Every model with dynamics therefore received a wrong nonlinearity. After the fix, the low-pass test improved from \SI{-5.2}{\decibel} to \SI{-81.1}{\decibel}, which is the 16-bit floor of that data.
+  \item \textbf{Identical phases across levels.} See \cref{subsec:impl_stimulus}.
+  \item \textbf{Acausal simulation.} With oversampling enabled, the plugin host compensated the full reported latency of the plugin. This moved the pre-ringing of its linear-phase filters ahead of the input, so the output led the input. Oversampling is now off. Data for identification must be sampled synchronously, without any resampling in the chain.
+  \item \textbf{Missing guard.} The first realization of each level follows the previous level without silence. It is excluded from all fits.
+\end{itemize}
+
 
 \section{Structural identification in MATLAB}
 \label{sec:impl_matlab}
-% BLA -> poles and zeros -> branches
+
+The MATLAB step uses the framework largely unchanged. It determines the linear structure of the model:
+\begin{enumerate}
+  \item \textbf{\gls{bla} per level.} Transients are removed with a local polynomial method, and the \gls{bla} is averaged over realizations 1--12. The noise and total variance are estimated as well (\cref{subsec:background_bla}).
+  \item \textbf{Rational fit.} One rational transfer function with a common denominator is fitted to the \glspl{bla} of all levels by weighted total least squares. The orders $n\sb{n} \leq n\sb{d} \leq 16$ are selected with the Akaike information criterion.
+  \item \textbf{Number of branches.} Only the numerators change with level. The number of branches is the rank of the matrix of numerator coefficients over all levels, estimated with a chi-square test on its singular values. A single Wiener--Hammerstein branch only changes the gain of its \gls{bla}; every independent change of shape needs another branch.
+  \item \textbf{Partition.} For each branch, the poles and zeros are split between the front and back filter. The framework searches the possible partitions.
+  \item \textbf{Nonlinearity.} With the filters fixed, the nonlinearity of each branch is fitted by linear least squares in a Chebyshev basis of order 21.
+\end{enumerate}
+
+\Cref{tab:impl_structures} shows the structures found for the main systems. The search finds a static model for the plugin and no extra branches for the loopback, as expected. The Packrat needs four to five branches. On its own, the MATLAB model of the pedal is poor (validation \gls{nmse} \SI{-11.0}{\decibel} for the softer and \SI{-2.6}{\decibel} for the harder setting). Its role is to provide the structure and a starting point for \cref{sec:impl_python}.
+
+\begin{table}[htbp]
+  \centering
+  \caption{Structures found by the MATLAB step and validation NMSE.}
+  \label{tab:impl_structures}
+  \begin{tabular}{lccc}
+    \toprule
+    System & $n\sb{n} / n\sb{d}$ & Branches & MATLAB NMSE \\
+    \midrule
+    PeakEater & 0/0 & 1 & \SI{-31.7}{\decibel} \\
+    Loopback (no pedal) & 2/12 & 1 & \SI{-65.2}{\decibel} \\
+    Packrat, softer & 5/5 & 5 & \SI{-11.0}{\decibel} \\
+    Packrat, harder & 4/7 & 4 & \SI{-2.6}{\decibel} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
 
 \section{Refinement in Python}
 \label{sec:impl_python}
-% spline nonlinearity, Adam optimization
+
+The Python step starts from the MATLAB model and optimizes all parameters jointly on the time-domain data. It is implemented in JAX.
+\begin{itemize}
+  \item \textbf{Nonlinearity.} Each Chebyshev polynomial is replaced by a uniform cubic B-spline (\cref{subsec:background_biquads}). The input is scaled and clamped to the spline range, so the output is constant beyond the range. The spline coefficients are first fitted by least squares with the MATLAB filters fixed.
+  \item \textbf{Parameters.} The poles, zeros and gains of all filters and all spline coefficients are trained.
+  \item \textbf{Loss and optimizer.} The loss is the \gls{nmse} of \cref{eq:nmse}, computed per sequence and then averaged, so that quiet and loud levels count equally. The first 8192 samples of each sequence are excluded. The optimizer is Adam with a learning rate of $10\sp{-3}$, which is reduced on plateaus down to $10\sp{-5}$. Training stops when the validation loss has not improved for 40 epochs.
+  \item \textbf{Constraints.} After each step, poles outside the unit circle are reflected inside, and all poles are kept a small margin away from it. The filter gains are normalized and moved into the nonlinearity.
+\end{itemize}
+
+\Cref{tab:impl_python} summarizes the alternatives. The refinement gives the largest single improvement in the chain: about \SI{20}{\decibel} for the plugin and \SI{19}{\decibel} for the softer Packrat setting. Splines are slightly better than polynomials, fit faster, and model a sharp clipping knee without ringing. The number of intervals has little effect: 8 instead of 32 intervals cost \SI{1.2}{\decibel} and halve the number of parameters, while the cost per sample stays the same. Too many intervals made the fit worse when there were few realizations, because the outer intervals contained only a few distinct peaks. The harder Packrat setting stays at \SI{-17.5}{\decibel}. Its clipping knee lies near the quietest level, and more branches did not help (\cref{ch:results}).
+
+\begin{table}[htbp]
+  \centering
+  \caption{Python refinement: test NMSE for different nonlinearities.}
+  \label{tab:impl_python}
+  \begin{tabular}{llcc}
+    \toprule
+    System & Nonlinearity & Parameters & Test NMSE \\
+    \midrule
+    PeakEater & Chebyshev, order 21 & -- & \SI{-44.9}{\decibel} \\
+    PeakEater & spline, 32 intervals & -- & \SI{-45.8}{\decibel} \\
+    Packrat, softer (5 kHz stim.) & spline, 32 intervals & 135 & \SI{-28.4}{\decibel} \\
+    Packrat, softer (5 kHz stim.) & spline, 8 intervals & 63 & \SI{-27.2}{\decibel} \\
+    Packrat, softer (10 kHz stim.) & spline, 32 intervals & 230 & \SI{-29.9}{\decibel} \\
+    Packrat, harder (10 kHz stim.) & spline, 32 intervals & 188 & \SI{-17.5}{\decibel} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
 
 \section{Export to C++}
 \label{sec:impl_export}
-% header format, verification against Python
 
-\section{Real-time implementation on the graetli}
+A fitted model is exported as a C header that contains only \texttt{\#define}s. For every branch it holds:
+\begin{itemize}
+  \item the front and back filters as biquad cascades, one row $\{b\sb{0}, b\sb{1}, b\sb{2}, a\sb{1}, a\sb{2}\}$ per section, and one gain per cascade;
+  \item the spline, converted from B-spline coefficients to one cubic $a\sb{0} + a\sb{1}t + a\sb{2}t\sp{2} + a\sb{3}t\sp{3}$ per interval, together with the scale and offset of its input.
+\end{itemize}
+The C code then needs no B-spline evaluation. Each branch computes
+\begin{align}
+  v &= \text{front cascade}(g\sb{\mathrm{f}}\, x), \\
+  u &= \operatorname{clamp}(v / s + o,\, -1,\, 1), \quad k = \min\!\big(\lfloor (u+1) L/2 \rfloor,\, L-1\big), \quad t = (u+1) L/2 - k, \\
+  y\sb{i} &= g\sb{\mathrm{b}}\, \text{back cascade}\big(a\sb{0,k} + a\sb{1,k} t + a\sb{2,k} t\sp{2} + a\sb{3,k} t\sp{3}\big),
+\end{align}
+where $L$ is the number of intervals, and the outputs $y\sb{i}$ of all branches are summed. To verify the export, we reimplemented the header in NumPy and compared it with the Python model on a guitar recording. The difference was below \SI{-247}{\decibel} in double precision and below \SI{-98}{\decibel} in single precision, i.e.\ rounding only.
+
+
+\section{Real-time implementation on the Graetli}
 \label{sec:impl_graetli}
-% Daisy Seed STM32H750
+
+The header is compiled into the Graetli firmware (\cref{subsec:graetli}). The implementation is independent of the model: a different pedal only needs a different header.
 
 \subsection{Signal flow and data layout}
 \label{subsec:impl_signal_flow}
-% Pwh.h, Pwh.cpp
+
+The model is a C++ class whose array sizes are template parameters taken from the header. Static assertions check at compile time that the header is consistent: number of branches, biquads per branch and spline size. No memory is allocated at run time. The audio callback processes one block of 32 samples:
+\begin{enumerate}
+  \item copy the input block and multiply it by \texttt{PRE_GAIN};
+  \item measure the peak and RMS of the block (\cref{subsec:impl_calibration});
+  \item for each branch: apply the front gain and cascade, evaluate the spline sample by sample, apply the back cascade and gain, and add the result to the output;
+  \item multiply the output by \texttt{POST GAIN} and measure its peak.
+\end{enumerate}
+The biquads are implemented in direct form I and keep their state between blocks. The direct form II transposed of the export has the same transfer function; direct form I only stores more state. The model is mono: the left input is processed, and the result is written to both outputs. All computations use single precision. The firmware is built with \texttt{-Os}, because the program has to fit into the \SI{128}{\kilo\byte} of internal flash; the current build uses \SI{97}{\kilo\byte}. The processing times are given in \cref{ch:results}.
 
 \subsection{Gain calibration and modes}
 \label{subsec:impl_calibration}
-% PRE/POST GAIN, bypass
 
-Gut zum sagen, was alles probiert wurde. aber keine chronologische dokumentation. Eher als liste wo wir  sagen was am besten funktioniert.
+The model is only valid for the levels it was trained on, but the converters of the Graetli have a different full scale than the interface used for the measurements. The firmware therefore has two gains on potentiometers:
+\begin{itemize}
+  \item \texttt{PRE GAIN} scales the input so that the model sees the training levels. To set it, the display shows the peak and RMS of the signal right before the model. We play a test sine with a known peak and turn \texttt{PRE GAIN} until the display shows the same peak. A sine with a peak of \SI{-10}{dBFS} (0.316) gave \texttt{PRE GAIN}~$= 0.56$: the Graetli input reads the signal about \SI{5}{\decibel} hotter than the interface. Without this correction, the model was driven too hard, and the Graetli sounded very different from the pedal (\cref{ch:results}).
+  \item \texttt{POST GAIN} only has to keep the output below full scale. The output conversion of libDaisy clamps every sample to $\pm 1$ without warning, which would add distortion that is not in the model. The display shows the output peak, and \texttt{POST GAIN} is lowered until it stays below 1. The remaining level difference to the pedal does not matter for the evaluation, since we compare at matched gain.
+\end{itemize}
+The meters show the value of the last block, so a short peak can be missed. A held peak or clip indicator would make the calibration more reliable.
+
+A footswitch selects the mode: digital bypass (the input is copied to the output), \gls{pwh} model, or mute. A second footswitch controls the analog bypass relay. The digital bypass, compared with the analog one, shows the influence of the Graetli's own converters. The display also shows the processing time of the callback.

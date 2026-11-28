@@ -1,9 +1,57 @@
 \chapter{Related Work}
 \label{ch:related_work}
 
-Discuss the state-of-the art and other related work.
-Depending on how much related work exists and how central the comparison to it is in your thesis (discuss this with your advisors), the introduction may contain sufficient related work and this chapter can be omitted.
+% Discuss the state-of-the art and other related work.
+% Depending on how much related work exists and how central the comparison to it is in your thesis (discuss this with your advisors), the introduction may contain sufficient related work and this chapter can be omitted.
 
 
-Hier eher die Papers aus der Introduction anschauen.
-Sachen worauf ich mich in der Evaluation beziehe
+% Hier eher die Papers aus der Introduction anschauen.
+% Sachen worauf ich mich in der Evaluation beziehe
+
+This chapter reviews the two black-box approaches to guitar distortion modeling that our results are compared to in \cref{ch:results}: block-oriented models (\cref{sec:related_block}) and neural networks (\cref{sec:related_neural}). \Cref{sec:related_pwh} then introduces the \gls{pwh} identification framework from power-amplifier modeling on which this work builds.
+
+\section{Block-oriented models of distortion circuits}
+\label{sec:related_block}
+
+Eichas and Zölzer~\cite{eichas2016blackbox} model guitar distortion circuits with an extended Wiener model, a linear filter followed by a parametric nonlinear mapping function. As in this work, the model is identified purely from input--output measurements. The filter is measured with a low-level exponential sine sweep, so that the circuit operates in its linear range, and the parameters of the mapping function are then optimized with the Levenberg--Marquardt algorithm.\\
+
+Three circuits are modeled: a diode clipper with pre-amplification, the transistor gain stage of an Electro-Harmonix Big Muff Pi, and the op-amp clipping stage of an Ibanez Tube Screamer. All three are simulated in LTspice rather than measured on hardware, and each represents only the clipping stage, not a complete pedal. Evaluated on a recorded guitar track, the models reach an \gls{esr} of 5.78\,\% for the diode clipper, 9.01\,\% for the Big Muff and 18.32\,\% for the Tube Screamer~\cite{eichas2016blackbox}. The authors attribute the larger errors to feedback paths in the Big Muff and Tube Screamer circuits, which a single filter followed by a single nonlinearity cannot represent.\\
+
+This limitation motivates the parallel structure used in this work: with several branches, each with its own filters and nonlinearity, the \gls{pwh} model can capture behavior that a single Wiener or Wiener--Hammerstein branch cannot. Unlike~\cite{eichas2016blackbox}, we model complete pedals and measure real hardware.
+
+\section{Neural network models}
+\label{sec:related_neural}
+
+Wright et al.~\cite{wright2020realtime} model guitar amplifiers with two neural network architectures: a WaveNet-style convolutional network and a recurrent network with an LSTM layer. The models are trained on about three minutes of guitar recordings, by minimizing the \gls{esr} computed after a pre-emphasis filter, together with a loss term for the DC offset. Two amplifiers are modeled: a Blackstar HT-5 Metal on its overdrive channel at maximum gain, and a Mesa Boogie 5:50 Plus on its crunch channel at low gain.\\
+
+On the test set, evaluated without pre-emphasis, the best models reach an \gls{esr} of 0.32\,\% for the high-gain Blackstar and 0.20\,\% for the Mesa Boogie~\cite{wright2020realtime}. These results come at a computational cost: the most accurate WaveNet model runs only 1.1 times faster than real time on a desktop CPU, while the smallest recurrent model runs 8.3 times faster, at a higher error.\\
+
+Neural models therefore define a high bar for accuracy, but their size makes them demanding for embedded processors, and their internal structure is not interpretable. The \gls{pwh} model, in contrast, consists only of biquad filters and splines (\cref{subsec:background_biquads,subsec:background_splines}), whose cost per sample is known in advance.
+
+\section{Parallel Wiener--Hammerstein identification}
+\label{sec:related_pwh}
+
+Parametric identification of \gls{pwh} systems from multisine measurements was introduced by Schoukens et al.~\cite{schoukens2015pwh}. The framework used in this work~\cite{pwh_pa_code} follows this approach and was originally developed to model \glspl{pa}. Its key idea, described in \cref{subsec:background_pwh}, is to derive the poles of all filters from \glspl{bla} measured at several input levels, and to distribute them over the front and back filters of the branches. To our knowledge, neither the \gls{pwh} model nor this identification procedure has previously been applied to guitar effects.
+
+% \section{Summary}
+% \label{sec:related_summary}
+
+% \Cref{tab:related_comparison} summarizes the two approaches our results are compared to. The \gls{esr} is the linear form of the \gls{nmse} used in this work, $\mathrm{NMSE} = 10\log\sb{10}(\mathrm{ESR})$, so the results can be compared directly. The comparison is only indicative, as the devices and test signals differ.
+
+% \begin{table}[htbp]
+%   \centering
+%   \caption{Black-box models of guitar distortion that this work is compared to. The \gls{nmse} values are converted from the reported \gls{esr}.}
+%   \label{tab:related_comparison}
+%   \begin{tabular}{llllrr}
+%     \toprule
+%     Work & Model & Device & Data & ESR & NMSE \\
+%     \midrule
+%     \cite{eichas2016blackbox} & Wiener & Diode clipper & SPICE & 5.78\,\% & $-12.4$\,dB \\
+%                               &        & Big Muff stage & SPICE & 9.01\,\% & $-10.4$\,dB \\
+%                               &        & Tube Screamer stage & SPICE & 18.32\,\% & $-7.4$\,dB \\
+%     \midrule
+%     \cite{wright2020realtime} & WaveNet & Blackstar HT-5 (high gain) & Hardware & 0.32\,\% & $-24.9$\,dB \\
+%                               & LSTM    & Mesa 5:50 (low gain) & Hardware & 0.20\,\% & $-27.0$\,dB \\
+%     \bottomrule
+%   \end{tabular}
+% \end{table}
